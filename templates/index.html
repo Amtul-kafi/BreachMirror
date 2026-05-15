@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BreachMirror — Attacker's View of Your Business</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+</head>
+<body>
+
+<div class="noise"></div>
+<div class="grid-bg"></div>
+
+<main>
+
+  <!-- ── HERO ─────────────────────────────────────────── -->
+  <section class="hero">
+    <div class="hero-badge">OSINT · PUBLIC DATA ONLY</div>
+    <h1>Breach<span class="accent">Mirror</span></h1>
+    <p class="hero-sub">See your business exactly the way an attacker does.<br>No system access. No guesswork. Only public truth.</p>
+
+    <div class="scan-box">
+      <div class="scan-input-wrap">
+        <span class="scan-prefix">https://</span>
+        <input
+          type="text"
+          id="domainInput"
+          placeholder="yourcompany.com"
+          autocomplete="off"
+          spellcheck="false"
+        />
+      </div>
+      <button id="scanBtn" class="btn-scan">
+        <span id="btnText">Scan Now</span>
+        <span id="btnLoader" class="hidden">
+          <span class="dot-pulse"></span>
+        </span>
+      </button>
+    </div>
+    <p class="disclaimer">Only publicly available data is used. No systems are accessed or tested.</p>
+  </section>
+
+  <!-- ── ERROR ─────────────────────────────────────────── -->
+  <div id="errorBox" class="error-box hidden"></div>
+
+  <!-- ── RESULTS ───────────────────────────────────────── -->
+  <section id="results" class="results hidden">
+
+    <!-- Score Hero -->
+    <div class="score-section">
+      <div class="score-label-top">EXPOSURE SCORE</div>
+      <div class="gauge-wrap">
+        <svg class="gauge" viewBox="0 0 200 120" xmlns="http://www.w3.org/2000/svg">
+          <!-- Track -->
+          <path d="M 20 110 A 90 90 0 0 1 180 110" fill="none" stroke="rgba(255,255,255,0.07)" stroke-width="12" stroke-linecap="round"/>
+          <!-- Fill - animated via JS -->
+          <path id="gaugeFill" d="M 20 110 A 90 90 0 0 1 180 110" fill="none" stroke="#FF3B30" stroke-width="12" stroke-linecap="round"
+            stroke-dasharray="283" stroke-dashoffset="283"/>
+          <!-- Score text -->
+          <text id="gaugeNumber" x="100" y="95" text-anchor="middle" font-size="38" font-weight="700" fill="white" font-family="Space Mono">0</text>
+          <text x="100" y="115" text-anchor="middle" font-size="10" fill="rgba(255,255,255,0.4)" font-family="Space Mono">/100</text>
+        </svg>
+      </div>
+      <div id="scoreRating" class="score-rating">—</div>
+      <div id="scoreSummary" class="score-summary"></div>
+    </div>
+
+    <!-- CEO Summary -->
+    <div class="panel ceo-panel">
+      <div class="panel-header">
+        <span class="panel-tag">CEO BRIEF</span>
+        <span class="panel-title">What This Means for Your Business</span>
+      </div>
+      <p id="ceoSummary" class="ceo-text"></p>
+      <button class="btn-copy" onclick="copyText('ceoSummary', this)">Copy</button>
+    </div>
+
+    <!-- Findings -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-tag">FINDINGS</span>
+        <span class="panel-title">What Attackers Can See</span>
+      </div>
+      <div id="findingsList" class="findings-list"></div>
+    </div>
+
+    <!-- Three columns: Email / Subdomains / Breaches -->
+    <div class="three-col">
+
+      <div class="panel mini-panel" id="emailPanel">
+        <div class="panel-tag">EMAIL SECURITY</div>
+        <div id="emailDetails" class="mini-details"></div>
+      </div>
+
+      <div class="panel mini-panel" id="subdomainPanel">
+        <div class="panel-tag">ATTACK SURFACE</div>
+        <div id="subdomainDetails" class="mini-details"></div>
+      </div>
+
+      <div class="panel mini-panel" id="breachPanel">
+        <div class="panel-tag">BREACH HISTORY</div>
+        <div id="breachDetails" class="mini-details"></div>
+      </div>
+
+    </div>
+
+    <!-- Scan another -->
+    <div class="scan-again">
+      <button class="btn-outline" onclick="resetScan()">↺ Scan Another Domain</button>
+    </div>
+
+  </section>
+
+</main>
+
+<footer>
+  <span>BreachMirror by <strong>Amatul Kafi Bhatti</strong></span>
+  <span class="footer-sep">·</span>
+  <span>Public data only · No storage · No tracking</span>
+</footer>
+
+<script>
+const SEVERITY_COLORS = {
+  critical: '#FF3B30',
+  high: '#FF6B35',
+  medium: '#FF9500',
+  low: '#30D158',
+  unknown: '#888'
+};
+
+const GAUGE_COLORS = {
+  Critical: '#FF3B30',
+  High: '#FF6B35',
+  Medium: '#FF9500',
+  Low: '#30D158'
+};
+
+const input = document.getElementById('domainInput');
+const scanBtn = document.getElementById('scanBtn');
+const btnText = document.getElementById('btnText');
+const btnLoader = document.getElementById('btnLoader');
+const errorBox = document.getElementById('errorBox');
+const resultsSection = document.getElementById('results');
+
+// Scan on Enter
+input.addEventListener('keydown', e => { if (e.key === 'Enter') startScan(); });
+scanBtn.addEventListener('click', startScan);
+
+async function startScan() {
+  const domain = input.value.trim();
+  if (!domain) return;
+
+  // UI state
+  errorBox.classList.add('hidden');
+  resultsSection.classList.add('hidden');
+  btnText.classList.add('hidden');
+  btnLoader.classList.remove('hidden');
+  scanBtn.disabled = true;
+  scanBtn.classList.add('scanning');
+
+  try {
+    const res = await fetch('/scan', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || data.error) {
+      showError(data.error || 'Scan failed. Please try again.');
+      return;
+    }
+
+    renderResults(data, domain);
+
+  } catch (e) {
+    showError('Connection error. Is the server running?');
+  } finally {
+    btnText.classList.remove('hidden');
+    btnLoader.classList.add('hidden');
+    scanBtn.disabled = false;
+    scanBtn.classList.remove('scanning');
+  }
+}
+
+function renderResults(data, domain) {
+  const score = data.score || {};
+  const email = data.email_security || {};
+  const subs = data.subdomains || {};
+  const breaches = data.breaches || {};
+
+  // ── Score gauge ──────────────────────────────────────
+  const val = score.value || 0;
+  const rating = score.rating || 'Low';
+  const gaugeColor = GAUGE_COLORS[rating] || '#30D158';
+
+  document.getElementById('gaugeNumber').textContent = val;
+  document.getElementById('scoreRating').textContent = rating + ' Exposure';
+  document.getElementById('scoreRating').style.color = gaugeColor;
+  document.getElementById('scoreSummary').textContent = score.summary || '';
+
+  // Animate gauge fill (283 = full arc circumference)
+  const offset = 283 - (val / 100) * 283;
+  const fill = document.getElementById('gaugeFill');
+  fill.style.stroke = gaugeColor;
+  setTimeout(() => { fill.style.strokeDashoffset = offset; }, 100);
+
+  // ── CEO summary ──────────────────────────────────────
+  document.getElementById('ceoSummary').textContent = data.ceo_summary || '—';
+
+  // ── Findings ─────────────────────────────────────────
+  const findingsEl = document.getElementById('findingsList');
+  findingsEl.innerHTML = '';
+  const findings = score.findings || [];
+  if (findings.length === 0) {
+    findingsEl.innerHTML = '<div class="finding-empty">No significant findings detected.</div>';
+  } else {
+    findings.forEach(f => {
+      const color = SEVERITY_COLORS[f.severity] || '#888';
+      findingsEl.innerHTML += `
+        <div class="finding-item" style="border-left-color:${color}">
+          <div class="finding-header">
+            <span class="finding-badge" style="background:${color}20;color:${color}">${f.severity.toUpperCase()}</span>
+            <span class="finding-title">${f.title}</span>
+          </div>
+          <p class="finding-desc">${f.plain_english}</p>
+          <p class="finding-fix"><strong>Fix:</strong> ${f.fix}</p>
+        </div>`;
+    });
+  }
+
+  // ── Email security ────────────────────────────────────
+  const emailEl = document.getElementById('emailDetails');
+  const spf = email.spf || {};
+  const dmarc = email.dmarc || {};
+  const dkim = email.dkim || {};
+  emailEl.innerHTML = `
+    ${statusRow('SPF', spf.present, spf.risk)}
+    ${statusRow('DMARC', dmarc.present, dmarc.risk, dmarc.policy ? `policy: ${dmarc.policy}` : null)}
+    ${statusRow('DKIM', dkim.present, dkim.risk)}
+  `;
+
+  // ── Subdomains ────────────────────────────────────────
+  const subEl = document.getElementById('subdomainDetails');
+  const total = subs.total_found || 0;
+  const sensitive = subs.sensitive || [];
+  subEl.innerHTML = `
+    <div class="stat-row">
+      <span class="stat-label">Total subdomains</span>
+      <span class="stat-val">${total}</span>
+    </div>
+    <div class="stat-row">
+      <span class="stat-label">Sensitive exposed</span>
+      <span class="stat-val" style="color:${sensitive.length > 0 ? '#FF9500' : '#30D158'}">${sensitive.length}</span>
+    </div>
+    ${sensitive.slice(0,3).map(s => `
+      <div class="subdomain-item">
+        <span class="subdomain-name">${s.subdomain}</span>
+        <span class="subdomain-reason">${s.reason}</span>
+      </div>`).join('')}
+  `;
+
+  // ── Breaches ──────────────────────────────────────────
+  const breachEl = document.getElementById('breachDetails');
+  if (breaches.fallback) {
+    breachEl.innerHTML = `<div class="breach-note">${breaches.summary}</div>`;
+  } else {
+    const count = breaches.breach_count || 0;
+    const color = count >= 3 ? '#FF3B30' : count >= 1 ? '#FF9500' : '#30D158';
+    breachEl.innerHTML = `
+      <div class="stat-row">
+        <span class="stat-label">Breaches found</span>
+        <span class="stat-val" style="color:${color}">${count}</span>
+      </div>
+      ${(breaches.breaches || []).slice(0,4).map(b => `
+        <div class="breach-item">
+          <span class="breach-name">${b.name}</span>
+          <span class="breach-desc">${b.description}</span>
+        </div>`).join('')}
+    `;
+  }
+
+  // ── Show results ──────────────────────────────────────
+  resultsSection.classList.remove('hidden');
+  resultsSection.classList.add('animate-in');
+  setTimeout(() => resultsSection.classList.remove('animate-in'), 600);
+  resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function statusRow(label, present, risk, note) {
+  const color = risk === 'critical' ? '#FF3B30' : risk === 'high' ? '#FF6B35' : risk === 'medium' ? '#FF9500' : '#30D158';
+  const icon = present ? '✓' : '✗';
+  const iconColor = present ? '#30D158' : '#FF3B30';
+  return `<div class="status-row">
+    <span class="status-icon" style="color:${iconColor}">${icon}</span>
+    <span class="status-label">${label}</span>
+    ${note ? `<span class="status-note">${note}</span>` : ''}
+    <span class="status-risk" style="color:${color}">${(risk||'').toUpperCase()}</span>
+  </div>`;
+}
+
+function showError(msg) {
+  errorBox.textContent = msg;
+  errorBox.classList.remove('hidden');
+}
+
+function resetScan() {
+  resultsSection.classList.add('hidden');
+  input.value = '';
+  input.focus();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function copyText(id, btn) {
+  const text = document.getElementById(id).textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    btn.textContent = '✓ Copied';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copy'; btn.classList.remove('copied'); }, 2000);
+  });
+}
+</script>
+</body>
+</html>
