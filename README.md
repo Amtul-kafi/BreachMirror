@@ -110,3 +110,24 @@ Basic steps:
 ---
 
 ## Comparison
+
+| Tool                          | Audience         | Output Style                        |
+| ----------------------------- | ---------------- | ----------------------------------- |
+| Enterprise security platforms | Security teams   | Technical dashboards                |
+| BreachMirror                  | Business leaders | Simple exposure + executive summary |
+
+---
+
+## Purpose
+
+BreachMirror is designed to improve security awareness at the decision-making level by making external risk visible, understandable, and actionable.
+
+---
+
+## Author
+
+Amatul Kafi Bhatti
+Cybersecurity • AI • Ethical Hacking
+
+GitHub: [https://github.com/Amtul-kafi](https://github.com/Amtul-kafi)
+LinkedIn: [https://linkedin.com/in/amatul-kafi-bhatti](https://linkedin.com/in/amatul-kafi-bhatti)
